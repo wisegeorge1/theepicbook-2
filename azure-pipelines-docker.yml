@@ -1,7 +1,7 @@
 # EpicBook Docker Compose Pipeline
 #
 # Builds and pushes the backend/frontend images, then deploys to the
-# Terraform-provisioned EC2 VM by SSH-ing in and running docker compose.
+# AZURE VM by SSH-ing in and running docker compose.
 # Independent of azure-pipelines.yml (the Ansible/RDS pipeline).
 #
 # Prerequisites in Azure DevOps:
@@ -55,18 +55,18 @@ stages:
 
           - script: |
               set -e
-              docker build -t $(dockerHubUsername)/epicbook-backend:$(imageTag) \
-                            -t $(dockerHubUsername)/epicbook-backend:latest ./backend
-              docker push $(dockerHubUsername)/epicbook-backend:$(imageTag)
-              docker push $(dockerHubUsername)/epicbook-backend:latest
+              docker build -t $(dockerHubUsername)/epicbook-2-backend:$(imageTag) \
+                            -t $(dockerHubUsername)/epicbook-2-backend:latest ./backend
+              docker push $(dockerHubUsername)/epicbook-2-backend:$(imageTag)
+              docker push $(dockerHubUsername)/epicbook-2-backend:latest
             displayName: 'Build and push backend image'
 
           - script: |
               set -e
-              docker build -t $(dockerHubUsername)/epicbook-frontend:$(imageTag) \
-                            -t $(dockerHubUsername)/epicbook-frontend:latest ./frontend
-              docker push $(dockerHubUsername)/epicbook-frontend:$(imageTag)
-              docker push $(dockerHubUsername)/epicbook-frontend:latest
+              docker build -t $(dockerHubUsername)/epicbook-2-frontend:$(imageTag) \
+                            -t $(dockerHubUsername)/epicbook-2-frontend:latest ./frontend
+              docker push $(dockerHubUsername)/epicbook-2-frontend:$(imageTag)
+              docker push $(dockerHubUsername)/epicbook-2-frontend:latest
             displayName: 'Build and push frontend image'
 
   # ---------------------------------------------------------------------
@@ -99,19 +99,19 @@ stages:
               set -e
               scp -o StrictHostKeyChecking=no -i "$(sshKeyPath)" \
                 docker-compose.yml proxy/nginx.conf \
-                ubuntu@$(vmPublicIp):~/theepicbook/
+                ubuntu@$(vmPublicIp):~/theepicbook-2/
               scp -o StrictHostKeyChecking=no -i "$(sshKeyPath)" \
-                proxy/nginx.conf ubuntu@$(vmPublicIp):~/theepicbook/proxy/nginx.conf
+                proxy/nginx.conf ubuntu@$(vmPublicIp):~/theepicbook-2/proxy/nginx.conf
             displayName: 'Copy latest Compose file and proxy config to the VM'
 
           - script: |
               set -e
               ssh -o StrictHostKeyChecking=no -i "$(sshKeyPath)" ubuntu@$(vmPublicIp) '
                 cd ~/theepicbook &&
-                sed -i "s|image: epicbook-backend:1.0|image: $(dockerHubUsername)/epicbook-backend:$(imageTag)|" docker-compose.yml &&
-                sed -i "s|image: epicbook-frontend:1.0|image: $(dockerHubUsername)/epicbook-frontend:$(imageTag)|" docker-compose.yml &&
-                docker pull $(dockerHubUsername)/epicbook-backend:$(imageTag) &&
-                docker pull $(dockerHubUsername)/epicbook-frontend:$(imageTag) &&
+                sed -i "s|image: epicbook-2-backend:1.0|image: $(dockerHubUsername)/epicbook-2-backend:$(imageTag)|" docker-compose.yml &&
+                sed -i "s|image: epicbook-2-frontend:1.0|image: $(dockerHubUsername)/epicbook-2-frontend:$(imageTag)|" docker-compose.yml &&
+                docker pull $(dockerHubUsername)/epicbook-2-backend:$(imageTag) &&
+                docker pull $(dockerHubUsername)/epicbook-2-frontend:$(imageTag) &&
                 docker compose up -d --remove-orphans &&
                 docker compose ps
               '
