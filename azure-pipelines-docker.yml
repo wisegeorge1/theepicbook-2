@@ -63,7 +63,7 @@ stages:
     steps:
     - checkout: self
 
-          - script: |
+          - script:|
               set -e
               docker build -t $(dockerHubUsername)/epicbook-2-backend:$(imageTag) \
                             -t $(dockerHubUsername)/epicbook-2-backend:latest ./backend
