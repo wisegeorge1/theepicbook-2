@@ -1,11 +1,17 @@
 # ============================================================
 # EpicBook Docker Compose CI/CD Pipeline
 #
+<<<<<<< HEAD
 # Cloud: Microsoft Azure
 # OS: Ubuntu Linux
 # SSH user: azureuser
 # Authentication: SSH password via Azure DevOps secret
 # Project: /home/azureuser/theepicbook-2
+=======
+# Builds and pushes the backend/frontend images, then deploys to the
+# AZURE VM by SSH-ing in and running docker compose.
+# Independent of azure-pipelines.yml (the Ansible/RDS pipeline).
+>>>>>>> ef45182889bc560adeca3c4714d14a874ef150d4
 #
 # Public entry point: Nginx reverse proxy, TCP/80
 # Internal services: backend, frontend, database
@@ -49,12 +55,30 @@ stages:
 - stage: BuildAndPush
   displayName: Build and Push Docker Images
 
+<<<<<<< HEAD
   jobs:
   - job: Build
     displayName: Build Backend and Frontend
 
     steps:
     - checkout: self
+=======
+          - script: |
+              set -e
+              docker build -t $(dockerHubUsername)/epicbook-2-backend:$(imageTag) \
+                            -t $(dockerHubUsername)/epicbook-2-backend:latest ./backend
+              docker push $(dockerHubUsername)/epicbook-2-backend:$(imageTag)
+              docker push $(dockerHubUsername)/epicbook-2-backend:latest
+            displayName: 'Build and push backend image'
+
+          - script: |
+              set -e
+              docker build -t $(dockerHubUsername)/epicbook-2-frontend:$(imageTag) \
+                            -t $(dockerHubUsername)/epicbook-2-frontend:latest ./frontend
+              docker push $(dockerHubUsername)/epicbook-2-frontend:$(imageTag)
+              docker push $(dockerHubUsername)/epicbook-2-frontend:latest
+            displayName: 'Build and push frontend image'
+>>>>>>> ef45182889bc560adeca3c4714d14a874ef150d4
 
     - script: |
         set -euo pipefail
@@ -71,6 +95,7 @@ stages:
     - script: |
         set -euo pipefail
 
+<<<<<<< HEAD
         docker build \
           -t "$(dockerHubUsername)/epicbook-backend:$(imageTag)" \
           -t "$(dockerHubUsername)/epicbook-backend:latest" \
@@ -78,6 +103,29 @@ stages:
 
         docker push \
           "$(dockerHubUsername)/epicbook-backend:$(imageTag)"
+=======
+          - script: |
+              set -e
+              scp -o StrictHostKeyChecking=no -i "$(sshKeyPath)" \
+                docker-compose.yml proxy/nginx.conf \
+                ubuntu@$(vmPublicIp):~/theepicbook-2/
+              scp -o StrictHostKeyChecking=no -i "$(sshKeyPath)" \
+                proxy/nginx.conf ubuntu@$(vmPublicIp):~/theepicbook-2/proxy/nginx.conf
+            displayName: 'Copy latest Compose file and proxy config to the VM'
+
+          - script: |
+              set -e
+              ssh -o StrictHostKeyChecking=no -i "$(sshKeyPath)" ubuntu@$(vmPublicIp) '
+                cd ~/theepicbook &&
+                sed -i "s|image: epicbook-2-backend:1.0|image: $(dockerHubUsername)/epicbook-2-backend:$(imageTag)|" docker-compose.yml &&
+                sed -i "s|image: epicbook-2-frontend:1.0|image: $(dockerHubUsername)/epicbook-2-frontend:$(imageTag)|" docker-compose.yml &&
+                docker pull $(dockerHubUsername)/epicbook-2-backend:$(imageTag) &&
+                docker pull $(dockerHubUsername)/epicbook-2-frontend:$(imageTag) &&
+                docker compose up -d --remove-orphans &&
+                docker compose ps
+              '
+            displayName: 'Pull new images and restart the stack (safe rollout)'
+>>>>>>> ef45182889bc560adeca3c4714d14a874ef150d4
 
         docker push \
           "$(dockerHubUsername)/epicbook-backend:latest"
