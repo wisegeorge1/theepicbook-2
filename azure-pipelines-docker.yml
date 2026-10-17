@@ -61,7 +61,7 @@ stages:
     displayName: Build Backend and Frontend
 
     steps:
-    - checkout: none
+    - checkout: wisegeorge1.theepicbook-2
 
           - script:|
               set -e
