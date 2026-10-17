@@ -8,15 +8,15 @@ The application uses environment variables to configure the backend and database
 **Required variables**
 
 
-| **Variable**	       |    **Used by**	         |    **Purpose**                                                                             |
+| **Variable**         |    **Used by**          |    **Purpose**                                                                             |
 |--------------------- | ------------------------|--------------------------------------------------------------------------------------------|
-| DB_ROOT_PASSWORD	   |    Database	           |   Sets the MySQL root password.                                                            |
-| DB_NAME	             |    Backend, Database	   |   Specifies the application database name.                                                 |
-| DB_USER	             |    Backend, Database	   |   Specifies the application database username.                                             |
-| DB_PASSWORD	         |    Backend, Database	   |   Sets the application database user's password.                                           |
-| NODE_ENV	           |    Backend	             |   Sets the Node.js environment to production.                                              |
-| PORT	               |    Backend	             |   Configures the backend application to listen on port 8080.                               |
-| JAWSDB_URL	         |    Backend	             |   Provides the MySQL connection URL, constructed from the database environment variables.  | 
+| DB_ROOT_PASSWORD     |    Database             |   Sets the MySQL root password.                                                            |
+| DB_NAME              |    Backend, Database    |   Specifies the application database name.                                                 |
+| DB_USER              |    Backend, Database    |   Specifies the application database username.                                             |
+| DB_PASSWORD          |    Backend, Database    |   Sets the application database user's password.                                           |
+| NODE_ENV             |    Backend              |   Sets the Node.js environment to production.                                              |
+| PORT                 |    Backend              |   Configures the backend application to listen on port 8080.                               |
+| JAWSDB_URL           |    Backend              |   Provides the MySQL connection URL, constructed from the database environment variables.  | 
 |                      |                         |                                                                                            |
 
 
@@ -30,13 +30,13 @@ The application uses environment variables to configure the backend and database
 ## 2. Network Ports
 The application uses separate Docker networks to control communication between services.
 
-| **Service**	            | **Internal Port**  |  **Host Port**     | **Purpose**                                                                        |
+| **Service**             | **Internal Port**  |  **Host Port**     | **Purpose**                                                                        |
 | ----------------------- | ------------------ | ------------------ | ---------------------------------------------------------------------------------- |
-| Reverse proxy (Nginx)	  |   80	             |   80       	      | Receives external HTTP traffic and forwards requests to the application services.  |
-| Frontend	              |   80	             |   Not published	  | Serves the frontend application to the reverse proxy.                              |
-| Backend	                |   8080     	       |   Not published	  | Handles application logic and API requests.                                        |
-| Database (MySQL)	      |   3306	           |   Not published	  | Provides database access to the backend.                                           |
-| MySQL X Protocol	      |   33060	           |   Not published	  | MySQL X Protocol listener; not required for the standard application connection.   |
+| Reverse proxy (Nginx)   |   80               |   80               | Receives external HTTP traffic and forwards requests to the application services.  |
+| Frontend                |   80               |   Not published    | Serves the frontend application to the reverse proxy.                              |
+| Backend                 |   8080             |   Not published    | Handles application logic and API requests.                                        |
+| Database (MySQL)        |   3306             |   Not published    | Provides database access to the backend.                                           |
+| MySQL X Protocol        |   33060            |   Not published    | MySQL X Protocol listener; not required for the standard application connection.   |
 |                         |                                         |                                                                                    |
 
 Only port 80 is published to the host in the current Compose configuration. The frontend, backend, and database communicate over their assigned Docker networks using service names.
@@ -52,12 +52,12 @@ The backend connects to MySQL using the hostname database and internal port 3306
 **Database Storage**
 The MySQL service uses a named Docker volume:
 
-| **Volume or Mount**	                        |   **Purpose**
+| **Volume or Mount**                         |   **Purpose**                                                                           |
 | ------------------------------------------- | --------------------------------------------------------------------------------------- |
-| db_data:/var/lib/mysql	                    |   Stores MySQL database files persistently across container recreation.                 |
-| ./db/BuyTheBook_Schema.sql	                |   Initializes the database schema on first-time database initialization.                |
-| ./db/author_seed.sql	                      |   Supplies initial author records.                                                      |
-| ./db/books_seed.sql	                        |   Supplies initial book records.                                                        |
+| db_data:/var/lib/mysql                      |   Stores MySQL database files persistently across container recreation.                 |
+| ./db/BuyTheBook_Schema.sql                  |   Initializes the database schema on first-time database initialization.                |
+| ./db/author_seed.sql                        |   Supplies initial author records.                                                      |
+| ./db/books_seed.sql                         |   Supplies initial book records.                                                        |
 |                                             |                                                                                         |
 
 The SQL files are mounted read-only into /docker-entrypoint-initdb.d/ in the database container.

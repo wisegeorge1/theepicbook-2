@@ -1,8 +1,6 @@
 # Epicbook : Health Checks and Startup Order
 **Prepared by George Adimowei Epebifie**
 
-
-
 # 1. Health Checks
 Docker Compose uses health checks to determine whether a service is ready to operate, rather than simply checking whether its container is running.
 
