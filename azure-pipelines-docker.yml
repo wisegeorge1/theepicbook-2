@@ -71,13 +71,13 @@ stages:
               docker push $(dockerHubUsername)/epicbook-2-backend:latest
             displayName:'Build and push backend image'
 
-          - script: |
+          - script:|
               set -e
               docker build -t $(dockerHubUsername)/epicbook-2-frontend:$(imageTag) \
                             -t $(dockerHubUsername)/epicbook-2-frontend:latest ./frontend
               docker push $(dockerHubUsername)/epicbook-2-frontend:$(imageTag)
               docker push $(dockerHubUsername)/epicbook-2-frontend:latest
-            displayName: 'Build and push frontend image'
+            displayName:'Build and push frontend image'
 
 
     - script: |
