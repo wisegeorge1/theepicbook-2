@@ -1,22 +1,11 @@
 # ============================================================
 # EpicBook Docker Compose CI/CD Pipeline
-#
-
 # Cloud: Microsoft Azure
 # OS: Ubuntu Linux
 # SSH user: azureuser
-# Authentication: SSH password via Azure DevOps secret
-# Project: /home/azureuser/theepicbook-2
-
-# Builds and pushes the backend/frontend images, then deploys to the
-# AZURE VM by SSH-ing in and running docker compose.
-# Independent of azure-pipelines.yml (the Ansible/RDS pipeline).
-
-#
-# Public entry point: Nginx reverse proxy, TCP/80
-# Internal services: backend, frontend, database
-#
-# Database persistence: Existing named volume retained
+# SSH authentication: Password via Azure DevOps secret
+# Project directory: /home/azureuser/theepicbook-2
+# Public entry point: Nginx on TCP/80
 # ============================================================
 
 trigger:
@@ -46,137 +35,86 @@ variables:
   - name: imageTag
     value: $(Build.BuildId)
 
+  - name: backendImage
+    value: epicbook-2-backend
+
+  - name: frontendImage
+    value: epicbook-2-frontend
+
 stages:
 
 # ============================================================
-# STAGE 1: BUILD AND PUSH IMAGES
+# STAGE 1: BUILD AND PUSH
 # ============================================================
 
 - stage: BuildAndPush
   displayName: Build and Push Docker Images
-
-
   jobs:
-  - job: Build
-    displayName: Build Backend and Frontend
+    - job: Build
+      displayName: Build Backend and Frontend
+      steps:
+        - checkout: self
 
-    steps:
-    - checkout: self
+        - script: |
+            set -euo pipefail
+            echo "$DOCKER_HUB_TOKEN" |
+              docker login \
+                --username "$DOCKER_HUB_USERNAME" \
+                --password-stdin
+          displayName: Login to Docker Hub
+          env:
+            DOCKER_HUB_USERNAME: $(dockerHubUsername)
+            DOCKER_HUB_TOKEN: $(dockerHubToken)
 
-          - script:|
-              set -e
-              docker build \ 
-                  -t $(dockerHubUsername)/epicbook-2-backend:$(imageTag) \
-                  -t $(dockerHubUsername)/epicbook-2-backend:latest \
-                  ./backend
+        - script: |
+            set -euo pipefail
 
-              docker push $(dockerHubUsername)/epicbook-2-backend:$(imageTag)
-              docker push $(dockerHubUsername)/epicbook-2-backend:latest
-            displayName:'Build and push backend image'
+            docker build \
+              -t "$(dockerHubUsername)/$(backendImage):$(imageTag)" \
+              -t "$(dockerHubUsername)/$(backendImage):latest" \
+              ./backend
 
-          - script:|
-              set -e
-              docker build \
-                  -t $(dockerHubUsername)/epicbook-2-frontend:$(imageTag) \
-                  -t $(dockerHubUsername)/epicbook-2-frontend:latest \
-                  ./frontend
+            docker push \
+              "$(dockerHubUsername)/$(backendImage):$(imageTag)"
 
-              docker push $(dockerHubUsername)/epicbook-2-frontend:$(imageTag)
-              docker push $(dockerHubUsername)/epicbook-2-frontend:latest
-            displayName:'Build and push frontend image'
+            docker push \
+              "$(dockerHubUsername)/$(backendImage):latest"
+          displayName: Build and Push Backend Image
 
+        - script: |
+            set -euo pipefail
 
-    - script: |
-        set -euo pipefail
+            docker build \
+              -t "$(dockerHubUsername)/$(frontendImage):$(imageTag)" \
+              -t "$(dockerHubUsername)/$(frontendImage):latest" \
+              ./frontend
 
-        echo "$DOCKER_HUB_TOKEN" |
-          docker login \
-            --username "$DOCKER_HUB_USERNAME" \
-            --password-stdin
-      displayName: Login to Docker Hub
-      env:
-        DOCKER_HUB_USERNAME: $(dockerHubUsername)
-        DOCKER_HUB_TOKEN: $(dockerHubToken)
+            docker push \
+              "$(dockerHubUsername)/$(frontendImage):$(imageTag)"
 
-    - script: |
-        set -euo pipefail
-
-
-        docker build \
-          -t "$(dockerHubUsername)/epicbook-backend:$(imageTag)" \
-          -t "$(dockerHubUsername)/epicbook-backend:latest" \
-          ./backend
-
-        docker push \
-          "$(dockerHubUsername)/epicbook-backend:$(imageTag)"
-
-          - script: |
-              set -e
-              scp -o StrictHostKeyChecking=no -i "$(sshKeyPath)" \
-                docker-compose.yml proxy/nginx.conf \
-                ubuntu@$(vmPublicIp):~/theepicbook-2/
-              scp -o StrictHostKeyChecking=no -i "$(sshKeyPath)" \
-                proxy/nginx.conf ubuntu@$(vmPublicIp):~/theepicbook-2/proxy/nginx.conf
-            displayName: 'Copy latest Compose file and proxy config to the VM'
-
-          - script: |
-              set -e
-              ssh -o StrictHostKeyChecking=no -i "$(sshKeyPath)" ubuntu@$(vmPublicIp) '
-                cd ~/theepicbook &&
-                sed -i "s|image: epicbook-2-backend:1.0|image: $(dockerHubUsername)/epicbook-2-backend:$(imageTag)|" docker-compose.yml &&
-                sed -i "s|image: epicbook-2-frontend:1.0|image: $(dockerHubUsername)/epicbook-2-frontend:$(imageTag)|" docker-compose.yml &&
-                docker pull $(dockerHubUsername)/epicbook-2-backend:$(imageTag) &&
-                docker pull $(dockerHubUsername)/epicbook-2-frontend:$(imageTag) &&
-                docker compose up -d --remove-orphans &&
-                docker compose ps
-              
-            displayName: 'Pull new images and restart the stack (safe rollout)'
-
-
-        docker push \
-          "$(dockerHubUsername)/epicbook-backend:latest"
-      displayName: Build and Push Backend Image
-
-    - script: |
-        set -euo pipefail
-
-        docker build \
-          -t "$(dockerHubUsername)/epicbook-frontend:$(imageTag)" \
-          -t "$(dockerHubUsername)/epicbook-frontend:latest" \
-          ./frontend
-
-        docker push \
-          "$(dockerHubUsername)/epicbook-frontend:$(imageTag)"
-
-        docker push \
-          "$(dockerHubUsername)/epicbook-frontend:latest"
-      displayName: Build and Push Frontend Image
-
+            docker push \
+              "$(dockerHubUsername)/$(frontendImage):latest"
+          displayName: Build and Push Frontend Image
 
 # ============================================================
-# STAGE 2: INSTALL SSH PASSWORD UTILITY
+# STAGE 2: PREPARE SSH PASSWORD AUTHENTICATION
 # ============================================================
 
 - stage: PrepareDeployment
   displayName: Prepare SSH Password Authentication
   dependsOn: BuildAndPush
-
   jobs:
-  - job: PrepareSSH
-    displayName: Install sshpass
+    - job: PrepareSSH
+      displayName: Install sshpass
+      steps:
+        - checkout: none
 
-    steps:
-    - checkout: none
-
-    - script: |
-        set -euo pipefail
-
-        sudo apt-get update -qq
-        sudo apt-get install -y sshpass
-
-        sshpass -V
-      displayName: Install SSH Password Authentication Utility
-
+        - script: |
+            set -euo pipefail
+            sudo apt-get update -qq
+            sudo apt-get install -y sshpass
+            sshpass -V
+          displayName: Install sshpass
 
 # ============================================================
 # STAGE 3: DEPLOY TO AZURE VM
@@ -185,206 +123,179 @@ stages:
 - stage: Deploy
   displayName: Deploy EpicBook to Azure VM
   dependsOn: PrepareDeployment
-
   jobs:
-  - job: DeployStack
-    displayName: Copy Configuration and Deploy Services
+    - job: DeployStack
+      displayName: Deploy Docker Compose Services
+      steps:
+        - checkout: self
 
-    steps:
-    - checkout: self
+        - script: |
+            set -euo pipefail
 
-    # --------------------------------------------------------
-    # SSH PASSWORD AUTHENTICATION
-    # --------------------------------------------------------
+            export SSHPASS="$VM_PASSWORD"
+            SSH_TARGET="${VM_USER}@${VM_PUBLIC_IP}"
+            REMOTE_DIR="$PROJECT_DIR"
 
-    - script: |
-        set -euo pipefail
+            SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15"
 
-        export SSHPASS="$VM_PASSWORD"
+            echo "Checking SSH connectivity..."
 
-        SSH_TARGET="${VM_USER}@${VM_PUBLIC_IP}"
-        REMOTE_DIR="$(projectDir)"
+            sshpass -e ssh $SSH_OPTS "$SSH_TARGET" \
+              "test -d '$REMOTE_DIR' && whoami"
 
-        SSH_OPTS="-o StrictHostKeyChecking=accept-new"
+            echo "SSH authentication successful."
+          displayName: Verify SSH Password Authentication
+          env:
+            VM_PASSWORD: $(vmPassword)
+            VM_USER: $(vmUser)
+            VM_PUBLIC_IP: $(vmPublicIp)
+            PROJECT_DIR: $(projectDir)
 
-        echo "Checking SSH connectivity to Azure VM..."
+        - script: |
+            set -euo pipefail
 
-        sshpass -e ssh $SSH_OPTS \
-          -o ConnectTimeout=15 \
-          "$SSH_TARGET" \
-          "whoami && test -d '$REMOTE_DIR'"
+            export SSHPASS="$VM_PASSWORD"
+            SSH_TARGET="${VM_USER}@${VM_PUBLIC_IP}"
+            REMOTE_DIR="$PROJECT_DIR"
 
-        echo "SSH authentication successful."
-      displayName: Verify SSH Password Authentication
-      env:
-        VM_PASSWORD: $(vmPassword)
-        VM_USER: $(vmUser)
-        VM_PUBLIC_IP: $(vmPublicIp)
+            SSH_OPTS="-o StrictHostKeyChecking=accept-new"
 
-    # --------------------------------------------------------
-    # COPY COMPOSE AND NGINX CONFIGURATION
-    # --------------------------------------------------------
+            sshpass -e ssh $SSH_OPTS "$SSH_TARGET" \
+              "mkdir -p '$REMOTE_DIR/proxy' '$REMOTE_DIR/logs/nginx'"
 
-    - script: |
-        set -euo pipefail
+            sshpass -e scp $SSH_OPTS \
+              docker-compose.yml \
+              "$SSH_TARGET:$REMOTE_DIR/docker-compose.yml"
 
-        export SSHPASS="$VM_PASSWORD"
+            sshpass -e scp $SSH_OPTS \
+              proxy/nginx.conf \
+              "$SSH_TARGET:$REMOTE_DIR/proxy/nginx.conf"
 
-        SSH_TARGET="${VM_USER}@${VM_PUBLIC_IP}"
-        REMOTE_DIR="$(projectDir)"
+            echo "Compose and Nginx configuration copied."
+          displayName: Copy Deployment Configuration
+          env:
+            VM_PASSWORD: $(vmPassword)
+            VM_USER: $(vmUser)
+            VM_PUBLIC_IP: $(vmPublicIp)
+            PROJECT_DIR: $(projectDir)
 
-        SSH_OPTS="-o StrictHostKeyChecking=accept-new"
+        - script: |
+            set -euo pipefail
 
-        sshpass -e ssh $SSH_OPTS "$SSH_TARGET" \
-          "mkdir -p '$REMOTE_DIR/proxy' '$REMOTE_DIR/logs/nginx'"
+            export SSHPASS="$VM_PASSWORD"
+            SSH_TARGET="${VM_USER}@${VM_PUBLIC_IP}"
+            REMOTE_DIR="$PROJECT_DIR"
+            OVERRIDE="$(Agent.TempDirectory)/docker-compose.ci.yml"
 
-        sshpass -e scp $SSH_OPTS \
-          docker-compose.yml \
-          "$SSH_TARGET:$REMOTE_DIR/docker-compose.yml"
+            cat > "$OVERRIDE" <<EOF
+            services:
+              backend:
+                image: $(dockerHubUsername)/$(backendImage):$(imageTag)
+              frontend:
+                image: $(dockerHubUsername)/$(frontendImage):$(imageTag)
+            EOF
 
-        sshpass -e scp $SSH_OPTS \
-          proxy/nginx.conf \
-          "$SSH_TARGET:$REMOTE_DIR/proxy/nginx.conf"
+            sshpass -e scp \
+              -o StrictHostKeyChecking=accept-new \
+              "$OVERRIDE" \
+              "$SSH_TARGET:$REMOTE_DIR/docker-compose.ci.yml"
 
-        echo "Compose and Nginx configuration copied."
-      displayName: Copy Docker Compose and Proxy Configuration
-      env:
-        VM_PASSWORD: $(vmPassword)
-        VM_USER: $(vmUser)
-        VM_PUBLIC_IP: $(vmPublicIp)
+            sshpass -e ssh \
+              -o StrictHostKeyChecking=accept-new \
+              "$SSH_TARGET" "
+                set -e
+                cd '$REMOTE_DIR'
 
-    # --------------------------------------------------------
-    # CREATE IMAGE OVERRIDE AND DEPLOY
-    # --------------------------------------------------------
+                docker compose \
+                  -f docker-compose.yml \
+                  -f docker-compose.ci.yml \
+                  config --quiet
 
-    - script: |
-        set -euo pipefail
+                docker compose \
+                  -f docker-compose.yml \
+                  -f docker-compose.ci.yml \
+                  pull backend frontend
 
-        export SSHPASS="$VM_PASSWORD"
+                docker compose \
+                  -f docker-compose.yml \
+                  -f docker-compose.ci.yml \
+                  up -d --remove-orphans
 
-        SSH_TARGET="${VM_USER}@${VM_PUBLIC_IP}"
-        REMOTE_DIR="$(projectDir)"
+                docker compose \
+                  -f docker-compose.yml \
+                  -f docker-compose.ci.yml \
+                  ps
+              "
 
-        OVERRIDE="$(Agent.TempDirectory)/docker-compose.ci.yml"
-
-        cat > "$OVERRIDE" <<'EOF'
-        services:
-          backend:
-            image: $(dockerHubUsername)/epicbook-backend:$(imageTag)
-          frontend:
-            image: $(dockerHubUsername)/epicbook-frontend:$(imageTag)
-        EOF
-
-        sshpass -e scp \
-          -o StrictHostKeyChecking=accept-new \
-          "$OVERRIDE" \
-          "$SSH_TARGET:$REMOTE_DIR/docker-compose.ci.yml"
-
-        sshpass -e ssh \
-          -o StrictHostKeyChecking=accept-new \
-          "$SSH_TARGET" "
-            set -e
-            cd '$REMOTE_DIR'
-
-            echo 'Validating Docker Compose configuration...'
-
-            docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.ci.yml \
-              config --quiet
-
-            echo 'Pulling updated application images...'
-
-            docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.ci.yml \
-              pull backend frontend
-
-            echo 'Deploying EpicBook services...'
-
-            docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.ci.yml \
-              up -d --remove-orphans
-
-            echo 'Container status:'
-
-            docker compose \
-              -f docker-compose.yml \
-              -f docker-compose.ci.yml \
-              ps
-          "
-
-        echo "Deployment command completed."
-      displayName: Deploy Updated Docker Images
-      env:
-        VM_PASSWORD: $(vmPassword)
-        VM_USER: $(vmUser)
-        VM_PUBLIC_IP: $(vmPublicIp)
-
+            echo "Deployment commands completed."
+          displayName: Pull Images and Deploy Stack
+          env:
+            VM_PASSWORD: $(vmPassword)
+            VM_USER: $(vmUser)
+            VM_PUBLIC_IP: $(vmPublicIp)
+            PROJECT_DIR: $(projectDir)
 
 # ============================================================
-# STAGE 4: VERIFY PUBLIC APPLICATION AND API
+# STAGE 4: VERIFY PUBLIC APPLICATION AND BACKEND API
 # ============================================================
 
 - stage: Verify
   displayName: Verify EpicBook Deployment
   dependsOn: Deploy
-
   jobs:
-  - job: VerifyDeployment
-    displayName: Test Nginx and Backend Health Endpoint
+    - job: VerifyDeployment
+      displayName: Verify Nginx and Backend Health
+      steps:
+        - checkout: none
 
-    steps:
-    - checkout: none
+        - script: |
+            set -euo pipefail
 
-    - script: |
-        set -euo pipefail
+            BASE_URL="http://${VM_PUBLIC_IP}"
 
-        BASE_URL="http://$(vmPublicIp)"
+            check_endpoint() {
+              local path="$1"
+              local expected="$2"
+              local status
 
-        check_endpoint() {
-          local path="$1"
-          local expected="$2"
-          local status
+              status=$(curl -sS \
+                --max-time 15 \
+                -o /tmp/epicbook-response.txt \
+                -w '%{http_code}' \
+                "$BASE_URL$path") || {
+                  echo "FAIL: Cannot reach $BASE_URL$path"
+                  return 1
+                }
 
-          status=$(curl -sS \
-            --max-time 15 \
-            -o /tmp/epicbook-response.txt \
-            -w '%{http_code}' \
-            "$BASE_URL$path") || {
-              echo "FAIL: Cannot reach $BASE_URL$path"
-              return 1
+              printf '%-25s HTTP %s\n' "$path" "$status"
+
+              if [[ "$status" != "$expected" ]]; then
+                echo "FAIL: Expected HTTP $expected for $path"
+                cat /tmp/epicbook-response.txt
+                return 1
+              fi
+
+              echo "PASS: $path"
             }
 
-          printf '%-40s HTTP %s\n' "$path" "$status"
+            echo "Waiting for deployment to stabilize..."
+            sleep 15
 
-          if [[ "$status" != "$expected" ]]; then
-            echo "FAIL: Expected HTTP $expected for $path"
-            cat /tmp/epicbook-response.txt
-            return 1
-          fi
+            echo "===== PUBLIC ENDPOINT VERIFICATION ====="
+            check_endpoint "/" "200"
+            check_endpoint "/health" "200"
 
-          echo "PASS: $path"
-        }
-
-        echo "Waiting for application startup..."
-        sleep 10
-
-        echo
-        echo "===== PUBLIC ENDPOINT VERIFICATION ====="
-
-        check_endpoint "/" "200"
-        check_endpoint "/health" "200"
-
-        echo
-        echo "===== DEPLOYMENT SUMMARY ====="
-        echo "Cloud provider : Microsoft Azure"
-        echo "VM user        : $(vmUser)"
-        echo "Public URL     : http://$(vmPublicIp)/"
-        echo "Reverse proxy  : Nginx"
-        echo "Backend health : HTTP 200"
-        echo "Image tag      : $(imageTag)"
-        echo "Result         : SUCCESS"
-        echo "========================================"
-      displayName: Verify Public Application and Backend Health
+            echo
+            echo "===== DEPLOYMENT SUMMARY ====="
+            echo "Cloud provider : Microsoft Azure"
+            echo "VM user        : $VM_USER"
+            echo "Public URL     : $BASE_URL/"
+            echo "Reverse proxy  : Nginx"
+            echo "Backend health : HTTP 200"
+            echo "Image tag      : $IMAGE_TAG"
+            echo "Result         : SUCCESS"
+          displayName: Verify Public Application and API
+          env:
+            VM_PUBLIC_IP: $(vmPublicIp)
+            VM_USER: $(vmUser)
+            IMAGE_TAG: $(imageTag)
