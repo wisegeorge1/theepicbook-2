@@ -1,7 +1,7 @@
 # ============================================================
 # EpicBook Docker Compose CI/CD Pipeline
 #
-<<<<<<< HEAD
+
 # Cloud: Microsoft Azure
 # OS: Ubuntu Linux
 # SSH user: azureuser
@@ -11,7 +11,7 @@
 # Builds and pushes the backend/frontend images, then deploys to the
 # AZURE VM by SSH-ing in and running docker compose.
 # Independent of azure-pipelines.yml (the Ansible/RDS pipeline).
->>>>>>> ef45182889bc560adeca3c4714d14a874ef150d4
+
 #
 # Public entry point: Nginx reverse proxy, TCP/80
 # Internal services: backend, frontend, database
@@ -95,7 +95,7 @@ stages:
     - script: |
         set -euo pipefail
 
-<<<<<<< HEAD
+
         docker build \
           -t "$(dockerHubUsername)/epicbook-backend:$(imageTag)" \
           -t "$(dockerHubUsername)/epicbook-backend:latest" \
@@ -125,7 +125,7 @@ stages:
                 docker compose ps
               '
             displayName: 'Pull new images and restart the stack (safe rollout)'
->>>>>>> ef45182889bc560adeca3c4714d14a874ef150d4
+
 
         docker push \
           "$(dockerHubUsername)/epicbook-backend:latest"
