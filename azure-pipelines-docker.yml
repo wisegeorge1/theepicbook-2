@@ -61,7 +61,7 @@ stages:
     displayName: Build Backend and Frontend
 
     steps:
-    - checkout: self
+    - checkout: none
 
           - script:|
               set -e
